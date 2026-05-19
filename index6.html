@@ -217,16 +217,33 @@
             });
         }
 
-        function reproducirVideo(videoId, titulo) {
+        async function reproducirVideo(videoId, titulo) {
             document.getElementById("player-container").style.display = "block";
             document.getElementById("current-title").innerText = titulo;
 
+            const videoUrl = `${PROXY_SERVER_URL}/stream?id=${videoId}`;
             const videoElement = document.getElementById("reproductor");
-            videoElement.src = `${PROXY_SERVER_URL}/stream?id=${videoId}`;
-            videoElement.load();
-            videoElement.play().catch(() => {
-                console.log("Esperando interacción del usuario...");
-            });
+
+            try {
+                limpiarError();
+
+                const response = await fetch(videoUrl, { method: "HEAD" });
+
+                if (!response.ok) {
+                    throw new Error(`Proxy no disponible (HTTP ${response.status})`);
+                }
+
+                videoElement.src = videoUrl;
+                videoElement.load();
+
+                videoElement.play().catch(() => {
+                    mostrarError("Haz clic en play para iniciar el vídeo.");
+                });
+            } catch (error) {
+                console.error("Error del proxy:", error);
+                mostrarError(`No se pudo cargar el vídeo: ${error.message}`);
+                document.getElementById("player-container").style.display = "none";
+            }
         }
     </script>
 </body>
