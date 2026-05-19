@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buscador y Reproductor Temporal</title>
+    <title>Buscador Temporal Correcto</title>
     <style>
         body { font-family: Arial, sans-serif; background: #121212; color: white; max-width: 800px; margin: 0 auto; padding: 20px; }
         .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
-        input { flex: 1; padding: 10px; border-radius: 4px; border: none; }
+        input { flex: 1; padding: 10px; border-radius: 4px; border: none; background: #222; color: white; }
         button { padding: 10px 20px; background: #ff0000; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
         #player-container { margin-bottom: 20px; display: none; }
         video { width: 100%; border-radius: 8px; background: #000; }
@@ -32,30 +32,53 @@
     <div id="resultados"></div>
 
     <script>
-        // CONFIGURACIÓN CRUCIAL
+        // CONFIGURACIÓN (Introduce tus datos correctos aquí)
         const YOUTUBE_API_KEY = "AIzaSyCrTcQsNhpTVUkcnyfWkwZmFvdNpVbc8M4"; 
-        const PROXY_SERVER_URL = "https://youtube-unblocked-for-ultron-games.onrender.com"; // Cambiar al desplegar el backend
+        const PROXY_SERVER_URL = "https://youtube-unblocked-for-ultron-games.onrender.com"; 
 
         async function buscarVideos() {
-    const query = document.getElementById('query').value;
-    if(!query) return;
+            const query = document.getElementById('query').value;
+            if(!query) return;
 
-    // Esta es la URL completa y corregida que necesita Google:
-    const url = "https://googleapis.com" + encodeURIComponent(query) + "&type=video&key=" + YOUTUBE_API_KEY;
-    
-    try {
-        const res = await fetch(url);
-        const data = await res.json();
-        mostrarResultados(data.items);
-    } catch (err) {
-        alert("Error al buscar vídeos. Revisa tu API Key.");
-    }
-}
+            // Formato limpio que el navegador construye de forma automática y perfecta
+            const parametros = new URLSearchParams({
+                part: 'snippet',
+                maxResults: '5',
+                q: query,
+                type: 'video',
+                key: YOUTUBE_API_KEY
+            });
+
+            const url = "https://googleapis.com?" + parametros.toString();
+            
+            try {
+                const res = await fetch(url);
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    console.error("Error detallado de Google:", errorData);
+                    alert("Error de la API de Google. Revisa la consola F12 para ver el motivo.");
+                    return;
+                }
+                const data = await res.json();
+                mostrarResultados(data.items);
+            } catch (err) {
+                console.error("Fallo de red:", err);
+                alert("Error de conexión. Revisa tu código.");
+            }
+        }
+
         function mostrarResultados(items) {
             const contenedor = document.getElementById('resultados');
             contenedor.innerHTML = '';
             
+            if(!items || items.length === 0) {
+                contenedor.innerHTML = '<p>No se encontraron vídeos.</p>';
+                return;
+            }
+            
             items.forEach(item => {
+                if(!item.id || !item.id.videoId) return;
+                
                 const div = document.createElement('div');
                 div.className = 'video-item';
                 div.onclick = () => reproducirVideo(item.id.videoId, item.snippet.title);
@@ -75,10 +98,9 @@
             document.getElementById('current-title').innerText = titulo;
             
             const videoElement = document.getElementById('reproductor');
-            // Apunta al backend proxy pasando el ID del vídeo para recibir los fragmentos
             videoElement.src = `${PROXY_SERVER_URL}/stream?id=${videoId}`;
             videoElement.load();
-            videoElement.play();
+            videoElement.play().catch(e => console.log("Esperando interacción del usuario..."));
         }
     </script>
 </body>
