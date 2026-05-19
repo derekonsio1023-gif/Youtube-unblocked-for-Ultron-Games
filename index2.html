@@ -40,7 +40,7 @@
     const query = document.getElementById('query').value;
     if(!query) return;
 
-    // ESTA LÍNEA TIENE LA URL DE GOOGLE COMPLETA Y CORRECTA:
+    // Esta es la URL completa y corregida que necesita Google:
     const url = "https://googleapis.com" + encodeURIComponent(query) + "&type=video&key=" + YOUTUBE_API_KEY;
     
     try {
@@ -51,8 +51,6 @@
         alert("Error al buscar vídeos. Revisa tu API Key.");
     }
 }
-
-
         function mostrarResultados(items) {
             const contenedor = document.getElementById('resultados');
             contenedor.innerHTML = '';
