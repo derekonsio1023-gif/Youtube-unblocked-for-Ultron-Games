@@ -37,17 +37,18 @@
         const PROXY_SERVER_URL = "https://youtube-unblocked-for-ultron-games.onrender.com"; 
 
         async function buscarVideos() {
-            const query = document.getElementById('query').value;
-            if(!query) return;
+  const query = document.getElementById("busqueda").value;
+  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(query)}&type=video&key=TU_API_KEY`;
 
-            // Formato limpio que el navegador construye de forma automática y perfecta
-            const parametros = new URLSearchParams({
-                part: 'snippet',
-                maxResults: '5',
-                q: query,
-                type: 'video',
-                key: YOUTUBE_API_KEY
-            });
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    console.log(data);
+  } catch (err) {
+    console.error("Fallo de red:", err);
+  }
+}
 
             const url = "https://googleapis.com?" + parametros.toString();
             
