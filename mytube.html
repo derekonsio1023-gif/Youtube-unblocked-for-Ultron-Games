@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador y Reproductor Temporal</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121212; color: white; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { flex: 1; padding: 10px; border-radius: 4px; border: none; }
+        button { padding: 10px 20px; background: #ff0000; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        #player-container { margin-bottom: 20px; display: none; }
+        video { width: 100%; border-radius: 8px; background: #000; }
+        .video-item { display: flex; gap: 15px; margin-bottom: 15px; background: #1e1e1e; padding: 10px; border-radius: 6px; cursor: pointer; }
+        .video-item img { width: 120px; border-radius: 4px; }
+        .video-info h4 { margin: 0 0 5px 0; }
+    </style>
+</head>
+<body>
+
+    <h2>Buscador de Vídeos</h2>
+    <div class="search-box">
+        <input type="text" id="query" placeholder="Busca un vídeo...">
+        <button onclick="buscarVideos()">Buscar</button>
+    </div>
+
+    <div id="player-container">
+        <h3 id="current-title">Reproduciendo</h3>
+        <video id="reproductor" controls autoplay></video>
+    </div>
+
+    <div id="resultados"></div>
+
+    <script>
+        // CONFIGURACIÓN CRUCIAL
+        const YOUTUBE_API_KEY = "TU_API_KEY_DE_YOUTUBE"; 
+        const PROXY_SERVER_URL = "https://tu-proxy-en-la-nube.com"; // Cambiar al desplegar el backend
+
+        async function buscarVideos() {
+            const query = document.getElementById('query').value;
+            if(!query) return;
+
+            const url = `https://googleapis.com{encodeURIComponent(query)}&type=video&key=${YOUTUBE_API_KEY}`;
+            
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                mostrarResultados(data.items);
+            } catch (err) {
+                alert("Error al buscar vídeos. Revisa tu API Key.");
+            }
+        }
+
+        function mostrarResultados(items) {
+            const contenedor = document.getElementById('resultados');
+            contenedor.innerHTML = '';
+            
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'video-item';
+                div.onclick = () => reproducirVideo(item.id.videoId, item.snippet.title);
+                div.innerHTML = `
+                    <img src="${item.snippet.thumbnails.medium.url}">
+                    <div class="video-info">
+                        <h4>${item.snippet.title}</h4>
+                        <p>${item.snippet.channelTitle}</p>
+                    </div>
+                `;
+                contenedor.appendChild(div);
+            });
+        }
+
+        function reproducirVideo(videoId, titulo) {
+            document.getElementById('player-container').style.display = 'block';
+            document.getElementById('current-title').innerText = titulo;
+            
+            const videoElement = document.getElementById('reproductor');
+            // Apunta al backend proxy pasando el ID del vídeo para recibir los fragmentos
+            videoElement.src = `${PROXY_SERVER_URL}/stream?id=${videoId}`;
+            videoElement.load();
+            videoElement.play();
+        }
+    </script>
+</body>
+</html>
