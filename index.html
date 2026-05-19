@@ -40,7 +40,7 @@
             const query = document.getElementById('query').value;
             if(!query) return;
 
-            const url = `https://googleapis.com{encodeURIComponent(query)}&type=video&key=${YOUTUBE_API_KEY}`;
+            const url = "https://googleapis.com" + encodeURIComponent(query) + "&type=video&key=" + YOUTUBE_API_KEY;
             
             try {
                 const res = await fetch(url);
