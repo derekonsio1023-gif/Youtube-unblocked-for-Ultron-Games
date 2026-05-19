@@ -37,19 +37,21 @@
         const PROXY_SERVER_URL = "https://youtube-unblocked-for-ultron-games.onrender.com"; // Cambiar al desplegar el backend
 
         async function buscarVideos() {
-            const query = document.getElementById('query').value;
-            if(!query) return;
+    const query = document.getElementById('query').value;
+    if(!query) return;
 
-            const url = "https://googleapis.com" + encodeURIComponent(query) + "&type=video&key=" + YOUTUBE_API_KEY;
-            
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                mostrarResultados(data.items);
-            } catch (err) {
-                alert("Error al buscar vídeos. Revisa tu API Key.");
-            }
-        }
+    // ESTA LÍNEA TIENE LA URL DE GOOGLE COMPLETA Y CORRECTA:
+    const url = "https://googleapis.com" + encodeURIComponent(query) + "&type=video&key=" + YOUTUBE_API_KEY;
+    
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        mostrarResultados(data.items);
+    } catch (err) {
+        alert("Error al buscar vídeos. Revisa tu API Key.");
+    }
+}
+
 
         function mostrarResultados(items) {
             const contenedor = document.getElementById('resultados');
