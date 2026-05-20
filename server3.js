@@ -8,15 +8,32 @@ const app = express();
 const corsOptions = {
     origin: '*', // Permitir todas las orígenes
     methods: ['GET', 'HEAD', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-    credentials: false
+    allowedHeaders: ['Content-Type', 'Range'],
+    credentials: false,
+    maxAge: 86400
 };
 
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.get('/', (req, res) => res.send('OK'));
 app.get('/health', (req, res) => res.send('healthy'));
 
+// Manejar HEAD requests
+app.head('/stream', async (req, res) => {
+    const videoId = req.query.id;
+
+    if (!videoId) {
+        return res.status(400).send('Falta el ID del vídeo');
+    }
+
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.send();
+});
+
+// Manejar GET requests
 app.get('/stream', async (req, res) => {
     const videoId = req.query.id;
 
@@ -29,6 +46,7 @@ app.get('/stream', async (req, res) => {
     try {
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Accept-Ranges', 'bytes');
 
         ytdl(videoUrl, {
             filter: 'audioandvideo',
