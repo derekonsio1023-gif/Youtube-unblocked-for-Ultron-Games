@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch');
 
 const app = express();
 
@@ -33,7 +32,7 @@ app.head('/stream', (req, res) => {
     res.send();
 });
 
-// Manejar GET requests - Usar piped.ai o similares
+// Manejar GET requests - Usar piped.ai
 app.get('/stream', async (req, res) => {
     const videoId = req.query.id;
 
@@ -48,13 +47,17 @@ app.get('/stream', async (req, res) => {
     res.setHeader('Accept-Ranges', 'bytes');
 
     try {
+        // Importar fetch dinámicamente
+        const fetch = (await import('node-fetch')).default;
+        
         // Usar piped.ai - servicio confiable de YouTube proxy
         const pipedUrl = `https://piped.kavin.rocks/api/v1/streams/${videoId}`;
         
         const response = await fetch(pipedUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            },
+            timeout: 10000
         });
 
         if (!response.ok) {
@@ -71,7 +74,7 @@ app.get('/stream', async (req, res) => {
         // Buscar un stream MP4 de buena calidad
         const videoStream = data.videoStreams
             .filter(s => s.mimeType && s.mimeType.includes('mp4'))
-            .sort((a, b) => b.quality - a.quality)[0];
+            .sort((a, b) => (b.quality || 0) - (a.quality || 0))[0];
 
         if (!videoStream || !videoStream.url) {
             throw new Error('No MP4 stream found');
@@ -81,7 +84,8 @@ app.get('/stream', async (req, res) => {
         const streamResponse = await fetch(videoStream.url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            },
+            timeout: 30000
         });
 
         if (!streamResponse.ok) {
