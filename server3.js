@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const https = require('https');
-const http = require('http');
+const axios = require('axios');
 
 const app = express();
 
@@ -34,8 +33,8 @@ app.head('/stream', (req, res) => {
     res.send();
 });
 
-// Manejar GET requests - Proxy a Invidious
-app.get('/stream', (req, res) => {
+// Manejar GET requests - Proxy directo a YouTube
+app.get('/stream', async (req, res) => {
     const videoId = req.query.id;
 
     if (!videoId) {
@@ -47,47 +46,66 @@ app.get('/stream', (req, res) => {
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Transfer-Encoding', 'chunked');
 
-    // Usar múltiples instancias de Invidious
-    const invidiousInstances = [
-        'https://invidious.nerdvpn.com',
-        'https://iv.nboeck.de',
-        'https://invidious.protokolla.fi'
-    ];
+    try {
+        // Obtener información del video de YouTube
+        const infoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        
+        // Usar un user agent real
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        };
 
-    const attemptDownload = (instanceIndex) => {
-        if (instanceIndex >= invidiousInstances.length) {
-            if (!res.headersSent) {
-                res.status(503).send('No se puede acceder al servidor de video');
-            }
-            return;
-        }
-
-        const instance = invidiousInstances[instanceIndex];
-        const url = `${instance}/latest_version?id=${videoId}&itag=18`;
-
-        const protocol = instance.startsWith('https') ? https : http;
-
-        protocol.get(url, { timeout: 10000 }, (proxyRes) => {
-            // Si la respuesta es exitosa, hacer proxy
-            if (proxyRes.statusCode === 200) {
-                res.writeHead(200, {
-                    'Content-Type': 'video/mp4',
-                    'Access-Control-Allow-Origin': '*'
-                });
-                proxyRes.pipe(res);
-            } else {
-                // Intentar con la siguiente instancia
-                attemptDownload(instanceIndex + 1);
-            }
-        }).on('error', (error) => {
-            console.error(`Error con ${instance}:`, error.message);
-            // Intentar con la siguiente instancia
-            attemptDownload(instanceIndex + 1);
+        // Intentar obtener el stream directo
+        const response = await axios.get(infoUrl, {
+            headers,
+            responseType: 'stream',
+            timeout: 15000
         });
-    };
 
-    attemptDownload(0);
+        response.data.pipe(res);
+
+        response.data.on('error', (error) => {
+            console.error('Stream error:', error);
+            if (!res.headersSent) {
+                res.status(500).send('Error streaming video');
+            }
+        });
+
+    } catch (error) {
+        console.error('Error:', error.message);
+        
+        // Intentar con proxy alternativo
+        try {
+            const altUrl = `https://invidious.nerdvpn.com/api/v1/videos/${videoId}?fields=formatStreams`;
+            
+            const altResponse = await axios.get(altUrl, { 
+                timeout: 10000
+            });
+
+            if (altResponse.data.formatStreams && altResponse.data.formatStreams.length > 0) {
+                const stream = altResponse.data.formatStreams.find(s => s.container === 'mp4');
+                
+                if (stream && stream.url) {
+                    const videoResponse = await axios.get(stream.url, {
+                        responseType: 'stream',
+                        timeout: 15000
+                    });
+
+                    videoResponse.data.pipe(res);
+                    return;
+                }
+            }
+
+            throw new Error('No stream found');
+        } catch (altError) {
+            console.error('Alternative stream error:', altError.message);
+            if (!res.headersSent) {
+                res.status(503).send('No se pudo obtener el video');
+            }
+        }
+    }
 });
 
 const PORT = process.env.PORT || 3000;
