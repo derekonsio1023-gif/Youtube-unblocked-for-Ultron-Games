@@ -1,14 +1,12 @@
 {
-  "name": "youtube-proxy-gratis",
+  "name": "video-ui",
   "version": "1.0.0",
-  "description": "Proxy temporal para streaming de video",
-  "main": "server3.js",
+  "type": "module",
   "scripts": {
-    "start": "node server3.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "node-fetch": "^2.6.11"
+    "express": "^4.21.2"
   }
 }
