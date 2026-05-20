@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
+const fetch = require('node-fetch');
 
 const app = express();
 
@@ -33,7 +33,7 @@ app.head('/stream', (req, res) => {
     res.send();
 });
 
-// Manejar GET requests - Proxy directo a YouTube
+// Manejar GET requests - Usar piped.ai o similares
 app.get('/stream', async (req, res) => {
     const videoId = req.query.id;
 
@@ -42,68 +42,72 @@ app.get('/stream', async (req, res) => {
         return;
     }
 
-    // Headers CORS antes de procesar
-    res.setHeader('Content-Type', 'video/mp4');
+    // Headers CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
-        // Obtener información del video de YouTube
-        const infoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        // Usar piped.ai - servicio confiable de YouTube proxy
+        const pipedUrl = `https://piped.kavin.rocks/api/v1/streams/${videoId}`;
         
-        // Usar un user agent real
-        const headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        };
-
-        // Intentar obtener el stream directo
-        const response = await axios.get(infoUrl, {
-            headers,
-            responseType: 'stream',
-            timeout: 15000
+        const response = await fetch(pipedUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
         });
 
-        response.data.pipe(res);
+        if (!response.ok) {
+            throw new Error(`Piped API error: ${response.status}`);
+        }
 
-        response.data.on('error', (error) => {
-            console.error('Stream error:', error);
+        const data = await response.json();
+
+        // Buscar el mejor stream de video
+        if (!data.videoStreams || data.videoStreams.length === 0) {
+            throw new Error('No video streams available');
+        }
+
+        // Buscar un stream MP4 de buena calidad
+        const videoStream = data.videoStreams
+            .filter(s => s.mimeType && s.mimeType.includes('mp4'))
+            .sort((a, b) => b.quality - a.quality)[0];
+
+        if (!videoStream || !videoStream.url) {
+            throw new Error('No MP4 stream found');
+        }
+
+        // Hacer proxy del stream
+        const streamResponse = await fetch(videoStream.url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        });
+
+        if (!streamResponse.ok) {
+            throw new Error(`Stream fetch error: ${streamResponse.status}`);
+        }
+
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Length', streamResponse.headers.get('content-length') || '');
+        
+        streamResponse.body.pipe(res);
+
+        streamResponse.body.on('error', (error) => {
+            console.error('Stream pipe error:', error);
             if (!res.headersSent) {
-                res.status(500).send('Error streaming video');
+                res.status(500).send('Error streaming');
             }
         });
 
     } catch (error) {
         console.error('Error:', error.message);
         
-        // Intentar con proxy alternativo
-        try {
-            const altUrl = `https://invidious.nerdvpn.com/api/v1/videos/${videoId}?fields=formatStreams`;
-            
-            const altResponse = await axios.get(altUrl, { 
-                timeout: 10000
+        if (!res.headersSent) {
+            res.status(503).json({
+                error: 'Service temporarily unavailable',
+                message: error.message
             });
-
-            if (altResponse.data.formatStreams && altResponse.data.formatStreams.length > 0) {
-                const stream = altResponse.data.formatStreams.find(s => s.container === 'mp4');
-                
-                if (stream && stream.url) {
-                    const videoResponse = await axios.get(stream.url, {
-                        responseType: 'stream',
-                        timeout: 15000
-                    });
-
-                    videoResponse.data.pipe(res);
-                    return;
-                }
-            }
-
-            throw new Error('No stream found');
-        } catch (altError) {
-            console.error('Alternative stream error:', altError.message);
-            if (!res.headersSent) {
-                res.status(503).send('No se pudo obtener el video');
-            }
         }
     }
 });
