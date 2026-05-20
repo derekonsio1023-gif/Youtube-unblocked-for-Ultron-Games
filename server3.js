@@ -1,122 +1,109 @@
 const express = require('express');
 const cors = require('cors');
+const ytdl = require('@distube/ytdl-core');
 
 const app = express();
 
-// Configurar CORS explícitamente
-const corsOptions = {
-    origin: '*',
-    methods: ['GET', 'HEAD', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Range'],
-    credentials: false,
-    maxAge: 86400
-};
+/*
+|--------------------------------------------------------------------------
+| CORS
+|--------------------------------------------------------------------------
+*/
 
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+app.use(cors());
 
-app.get('/', (req, res) => res.send('OK'));
-app.get('/health', (req, res) => res.send('healthy'));
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', '*');
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS');
+    next();
+});
 
-// Manejar HEAD requests
-app.head('/stream', (req, res) => {
+/*
+|--------------------------------------------------------------------------
+| Rutas básicas
+|--------------------------------------------------------------------------
+*/
+
+app.get('/', (req, res) => {
+    res.send('Servidor funcionando');
+});
+
+app.get('/health', (req, res) => {
+    res.send('healthy');
+});
+
+/*
+|--------------------------------------------------------------------------
+| STREAM
+|--------------------------------------------------------------------------
+*/
+
+app.get('/stream', async (req, res) => {
     const videoId = req.query.id;
 
     if (!videoId) {
         return res.status(400).send('Falta el ID del vídeo');
     }
 
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.send();
-});
-
-// Manejar GET requests - Usar piped.ai
-app.get('/stream', async (req, res) => {
-    const videoId = req.query.id;
-
-    if (!videoId) {
-        res.status(400).setHeader('Access-Control-Allow-Origin', '*').send('Falta el ID del vídeo');
-        return;
-    }
-
-    // Headers CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Accept-Ranges', 'bytes');
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
     try {
-        // Importar fetch dinámicamente
-        const fetch = (await import('node-fetch')).default;
-        
-        // Usar piped.ai - servicio confiable de YouTube proxy
-        const pipedUrl = `https://piped.kavin.rocks/api/v1/streams/${videoId}`;
-        
-        const response = await fetch(pipedUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            },
-            timeout: 10000
-        });
 
-        if (!response.ok) {
-            throw new Error(`Piped API error: ${response.status}`);
-        }
+        // Verifica si el vídeo existe
+        const info = await ytdl.getInfo(videoUrl);
 
-        const data = await response.json();
-
-        // Buscar el mejor stream de video
-        if (!data.videoStreams || data.videoStreams.length === 0) {
-            throw new Error('No video streams available');
-        }
-
-        // Buscar un stream MP4 de buena calidad
-        const videoStream = data.videoStreams
-            .filter(s => s.mimeType && s.mimeType.includes('mp4'))
-            .sort((a, b) => (b.quality || 0) - (a.quality || 0))[0];
-
-        if (!videoStream || !videoStream.url) {
-            throw new Error('No MP4 stream found');
-        }
-
-        // Hacer proxy del stream
-        const streamResponse = await fetch(videoStream.url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            },
-            timeout: 30000
-        });
-
-        if (!streamResponse.ok) {
-            throw new Error(`Stream fetch error: ${streamResponse.status}`);
-        }
+        console.log('Reproduciendo:', info.videoDetails.title);
 
         res.setHeader('Content-Type', 'video/mp4');
-        res.setHeader('Content-Length', streamResponse.headers.get('content-length') || '');
-        
-        streamResponse.body.pipe(res);
 
-        streamResponse.body.on('error', (error) => {
-            console.error('Stream pipe error:', error);
+        const stream = ytdl(videoUrl, {
+            filter: 'audioandvideo',
+            quality: 'highest'
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Error del stream
+        |--------------------------------------------------------------------------
+        */
+
+        stream.on('error', (err) => {
+            console.error('Error del stream:', err);
+
             if (!res.headersSent) {
-                res.status(500).send('Error streaming');
+                res.status(503).send('No se pudo obtener el vídeo');
+            } else {
+                res.destroy();
             }
         });
 
+        /*
+        |--------------------------------------------------------------------------
+        | Pipe
+        |--------------------------------------------------------------------------
+        */
+
+        stream.pipe(res);
+
     } catch (error) {
-        console.error('Error:', error.message);
-        
+
+        console.error('ERROR GENERAL:', error);
+
         if (!res.headersSent) {
-            res.status(503).json({
-                error: 'Service temporarily unavailable',
-                message: error.message
-            });
+            res.status(503).send('Error al procesar el vídeo');
         }
     }
 });
 
+/*
+|--------------------------------------------------------------------------
+| Puerto
+|--------------------------------------------------------------------------
+*/
+
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-    console.log(`Servidor proxy corriendo en puerto ${PORT}`);
+    console.log(`Servidor iniciado en puerto ${PORT}`);
 });
