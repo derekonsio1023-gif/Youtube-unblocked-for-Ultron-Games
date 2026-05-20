@@ -2,9 +2,9 @@
   "name": "youtube-proxy-gratis",
   "version": "1.0.0",
   "description": "Proxy temporal para streaming de video",
-  "main": "server.js",
+  "main": "server3.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server3.js"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.15.9",
