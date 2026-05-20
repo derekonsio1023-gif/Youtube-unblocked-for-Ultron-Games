@@ -1,109 +1,56 @@
+// server.js (Node/Express + ytdl-core)
 const express = require('express');
-const cors = require('cors');
-const ytdl = require('@distube/ytdl-core');
-
+const ytdl = require('ytdl-core');
 const app = express();
 
-/*
-|--------------------------------------------------------------------------
-| CORS
-|--------------------------------------------------------------------------
-*/
-
-app.use(cors());
-
+// Middleware CORS: permitir todos los orígenes (ajustar según necesidad)
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', '*');
-    res.header('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS');
-    next();
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
 });
 
-/*
-|--------------------------------------------------------------------------
-| Rutas básicas
-|--------------------------------------------------------------------------
-*/
-
-app.get('/', (req, res) => {
-    res.send('Servidor funcionando');
-});
-
-app.get('/health', (req, res) => {
-    res.send('healthy');
-});
-
-/*
-|--------------------------------------------------------------------------
-| STREAM
-|--------------------------------------------------------------------------
-*/
-
+// Endpoint para transmitir video de YouTube
 app.get('/stream', async (req, res) => {
-    const videoId = req.query.id;
+  const videoId = req.query.id;
+  if (!videoId) {
+    return res.status(400).send('Falta ID de video');
+  }
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-    if (!videoId) {
-        return res.status(400).send('Falta el ID del vídeo');
+  try {
+    // Verificar que el video es accesible (opcionalmente se podría comprobar con ytdl-core)
+    if (!ytdl.validateID(videoId)) {
+      return res.status(400).send('ID de video inválido');
     }
 
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    // Iniciar la descarga/stream del video
+    const videoStream = ytdl(url, {
+      filter: format => format.container === 'mp4' && format.hasVideo && format.hasAudio,
+      quality: 'highest'
+    });
 
-    try {
+    // Propagar cabecera de tipo de contenido (se espera que sea MP4)
+    res.setHeader('Content-Type', 'video/mp4');
+    // Permitir rangos (útil para reproducir y buscar en el video)
+    res.setHeader('Accept-Ranges', 'bytes');
 
-        // Verifica si el vídeo existe
-        const info = await ytdl.getInfo(videoUrl);
+    // Manejar errores de ytdl
+    videoStream.on('error', err => {
+      console.error('Error en ytdl-stream:', err.message || err);
+      // Responder con 500 o 503 según el error
+      res.sendStatus(500);
+    });
 
-        console.log('Reproduciendo:', info.videoDetails.title);
-
-        res.setHeader('Content-Type', 'video/mp4');
-
-        const stream = ytdl(videoUrl, {
-            filter: 'audioandvideo',
-            quality: 'highest'
-        });
-
-        /*
-        |--------------------------------------------------------------------------
-        | Error del stream
-        |--------------------------------------------------------------------------
-        */
-
-        stream.on('error', (err) => {
-            console.error('Error del stream:', err);
-
-            if (!res.headersSent) {
-                res.status(503).send('No se pudo obtener el vídeo');
-            } else {
-                res.destroy();
-            }
-        });
-
-        /*
-        |--------------------------------------------------------------------------
-        | Pipe
-        |--------------------------------------------------------------------------
-        */
-
-        stream.pipe(res);
-
-    } catch (error) {
-
-        console.error('ERROR GENERAL:', error);
-
-        if (!res.headersSent) {
-            res.status(503).send('Error al procesar el vídeo');
-        }
-    }
+    // Pipe: enviar los datos de video al cliente
+    videoStream.pipe(res);
+  } catch (error) {
+    console.error('Error en /stream:', error);
+    res.sendStatus(500);
+  }
 });
 
-/*
-|--------------------------------------------------------------------------
-| Puerto
-|--------------------------------------------------------------------------
-*/
-
-const PORT = process.env.PORT || 3000;
-
+// Iniciar servidor en el puerto indicado por Render (env PORT) o 10000
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`Servidor iniciado en puerto ${PORT}`);
+  console.log(`Servidor de streaming escuchando en puerto ${PORT}`);
 });
