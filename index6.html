@@ -2,64 +2,55 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Video Player</title>
-
-<style>
-body{
-    margin:0;
-    background:#0f0f0f;
-    color:white;
-    font-family:Arial;
-}
-
-.topbar{
-    height:60px;
-    background:#181818;
-    display:flex;
-    align-items:center;
-    padding:0 20px;
-    border-bottom:1px solid #333;
-}
-
-.logo{
-    color:red;
-    font-size:24px;
-    font-weight:bold;
-}
-
-.container{
-    padding:20px;
-}
-
-video{
-    width:100%;
-    max-width:1200px;
-    border-radius:12px;
-    background:black;
-}
-
-.title{
-    margin-top:15px;
-    font-size:24px;
-}
-</style>
+<title>MyTube</title>
 </head>
 
 <body>
 
-<div class="topbar">
-    <div class="logo">▶ MyTube</div>
-</div>
+<button id="openBtn">
+Abrir reproductor
+</button>
 
-<div class="container">
+<script>
+document.getElementById("openBtn").onclick = () => {
+
+    const w = window.open("about:blank");
+
+    w.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <title>Player</title>
+
+    <style>
+    body{
+        margin:0;
+        background:black;
+        overflow:hidden;
+    }
+
+    video{
+        width:100vw;
+        height:100vh;
+        object-fit:contain;
+        background:black;
+    }
+    </style>
+
+    </head>
+
+    <body>
+
     <video controls autoplay>
         <source src="video.mp4" type="video/mp4">
     </video>
 
-    <div class="title">
-        Mi video
-    </div>
-</div>
+    </body>
+    </html>
+    `);
+
+};
+</script>
 
 </body>
 </html>
