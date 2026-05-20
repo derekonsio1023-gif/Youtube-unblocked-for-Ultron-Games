@@ -1,12 +1,13 @@
 const express = require('express');
 const cors = require('cors');
-const ytdl = require('@distube/ytdl-core');
+const { spawn } = require('child_process');
+const fs = require('fs');
 
 const app = express();
 
 // Configurar CORS explícitamente
 const corsOptions = {
-    origin: '*', // Permitir todas las orígenes
+    origin: '*',
     methods: ['GET', 'HEAD', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Range'],
     credentials: false,
@@ -20,7 +21,7 @@ app.get('/', (req, res) => res.send('OK'));
 app.get('/health', (req, res) => res.send('healthy'));
 
 // Manejar HEAD requests
-app.head('/stream', async (req, res) => {
+app.head('/stream', (req, res) => {
     const videoId = req.query.id;
 
     if (!videoId) {
@@ -30,32 +31,67 @@ app.head('/stream', async (req, res) => {
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Transfer-Encoding', 'chunked');
     res.send();
 });
 
 // Manejar GET requests
-app.get('/stream', async (req, res) => {
+app.get('/stream', (req, res) => {
     const videoId = req.query.id;
 
     if (!videoId) {
-        return res.status(400).send('Falta el ID del vídeo');
+        res.status(400).setHeader('Access-Control-Allow-Origin', '*').send('Falta el ID del vídeo');
+        return;
     }
 
-    const videoUrl = `https://youtube.com/watch?v=${videoId}`;
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    // Headers CORS antes de procesar
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
-        res.setHeader('Content-Type', 'video/mp4');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Accept-Ranges', 'bytes');
+        // Usar yt-dlp para descargar
+        const ytdlp = spawn('yt-dlp', [
+            '-f', 'best[ext=mp4]/best',
+            '-o', '-',
+            '--no-warnings',
+            '--quiet',
+            videoUrl
+        ]);
 
-        ytdl(videoUrl, {
-            filter: 'audioandvideo',
-            quality: 'highest'
-        }).pipe(res);
+        let isError = false;
+
+        ytdlp.stdout.pipe(res);
+
+        ytdlp.stderr.on('data', (data) => {
+            console.error(`stderr: ${data}`);
+            if (!isError) {
+                isError = true;
+                res.status(500).send('Error al procesar el vídeo');
+            }
+        });
+
+        ytdlp.on('error', (error) => {
+            console.error('Error:', error);
+            if (!res.headersSent) {
+                res.status(500).send('Error al descargar el vídeo');
+            }
+        });
+
+        ytdlp.on('close', (code) => {
+            if (code !== 0 && !isError) {
+                console.error(`yt-dlp exited with code ${code}`);
+                if (!res.headersSent) {
+                    res.status(500).send('Error al procesar el vídeo');
+                }
+            }
+        });
 
     } catch (error) {
-        console.error(error);
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        console.error('Error:', error);
         res.status(500).send('Error al procesar el vídeo');
     }
 });
