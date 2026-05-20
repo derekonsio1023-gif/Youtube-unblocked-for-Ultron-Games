@@ -1,33 +1,66 @@
-<!-- index.html (cargado en about:blank) -->
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Reproductor YouTube sin iframe</title>
-</head>
-<body>
-  <h2>Reproductor personalizado (sin &lt;iframe&gt;)</h2>
-  <video id="videoPlayer" width="640" height="360" controls>
-    <!-- Fuente se asignará dinámicamente -->
-    Tu navegador no soporta video HTML5.
-  </video>
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 
-  <script>
-    // ID del video de YouTube que se desea reproducir
-    const videoId = 'M7lc1UVf-VE'; // ejemplo: video de demostración
-    // URL de la ruta /stream en el servidor
-    const serverUrl = `https://miapp.onrender.com/stream?id=${videoId}`;
+const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-    // Obtener el elemento <video> y asignar la fuente
-    const videoElem = document.getElementById('videoPlayer');
-    videoElem.src = serverUrl;
-    // Agregar atributo CORS si fuese necesario
-    videoElem.crossOrigin = "anonymous";
+app.use(cors());
+app.use(express.json());
 
-    // Opcional: manejar errores de reproducción
-    videoElem.addEventListener('error', (e) => {
-      console.error('Error al reproducir el video:', e);
-    });
-  </script>
-</body>
-</html>
+const VIDEOS = {
+  "M7lc1UVf-VE": {
+    id: "M7lc1UVf-VE",
+    title: "Demo video 1",
+    channel: "Mi canal",
+    description: "Video de prueba.",
+    thumbnail: "https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg",
+    streamUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+  },
+  "2JwfBKrMwnw": {
+    id: "2JwfBKrMwnw",
+    title: "Demo video 2",
+    channel: "Mi canal",
+    description: "Segundo video de prueba.",
+    thumbnail: "https://i.ytimg.com/vi/2JwfBKrMwnw/hqdefault.jpg",
+    streamUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+  }
+};
+
+app.get("/api/videos", (req, res) => {
+  res.json(Object.values(VIDEOS));
+});
+
+app.get("/api/videos/:id", (req, res) => {
+  const video = VIDEOS[req.params.id];
+  if (!video) return res.status(404).json({ error: "Video no encontrado" });
+  res.json(video);
+});
+
+app.get("/stream", (req, res) => {
+  const id = req.query.id;
+  const video = VIDEOS[id];
+
+  if (!id) {
+    return res.status(400).json({ error: "Falta el parámetro id" });
+  }
+
+  if (!video) {
+    return res.status(404).json({ error: "Video no encontrado" });
+  }
+
+  return res.redirect(302, video.streamUrl);
+});
+
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+const port = process.env.PORT || 10000;
+app.listen(port, () => {
+  console.log(`Servidor listo en el puerto ${port}`);
+});
