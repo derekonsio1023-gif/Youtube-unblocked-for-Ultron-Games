@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const { spawn } = require('child_process');
-const fs = require('fs');
+const https = require('https');
+const http = require('http');
 
 const app = express();
 
@@ -31,11 +31,10 @@ app.head('/stream', (req, res) => {
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Transfer-Encoding', 'chunked');
     res.send();
 });
 
-// Manejar GET requests
+// Manejar GET requests - Proxy a Invidious
 app.get('/stream', (req, res) => {
     const videoId = req.query.id;
 
@@ -44,56 +43,51 @@ app.get('/stream', (req, res) => {
         return;
     }
 
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
     // Headers CORS antes de procesar
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Transfer-Encoding', 'chunked');
 
-    try {
-        // Usar yt-dlp para descargar
-        const ytdlp = spawn('yt-dlp', [
-            '-f', 'best[ext=mp4]/best',
-            '-o', '-',
-            '--no-warnings',
-            '--quiet',
-            videoUrl
-        ]);
+    // Usar múltiples instancias de Invidious
+    const invidiousInstances = [
+        'https://invidious.nerdvpn.com',
+        'https://iv.nboeck.de',
+        'https://invidious.protokolla.fi'
+    ];
 
-        let isError = false;
-
-        ytdlp.stdout.pipe(res);
-
-        ytdlp.stderr.on('data', (data) => {
-            console.error(`stderr: ${data}`);
-            if (!isError) {
-                isError = true;
-                res.status(500).send('Error al procesar el vídeo');
-            }
-        });
-
-        ytdlp.on('error', (error) => {
-            console.error('Error:', error);
+    const attemptDownload = (instanceIndex) => {
+        if (instanceIndex >= invidiousInstances.length) {
             if (!res.headersSent) {
-                res.status(500).send('Error al descargar el vídeo');
+                res.status(503).send('No se puede acceder al servidor de video');
             }
-        });
+            return;
+        }
 
-        ytdlp.on('close', (code) => {
-            if (code !== 0 && !isError) {
-                console.error(`yt-dlp exited with code ${code}`);
-                if (!res.headersSent) {
-                    res.status(500).send('Error al procesar el vídeo');
-                }
+        const instance = invidiousInstances[instanceIndex];
+        const url = `${instance}/latest_version?id=${videoId}&itag=18`;
+
+        const protocol = instance.startsWith('https') ? https : http;
+
+        protocol.get(url, { timeout: 10000 }, (proxyRes) => {
+            // Si la respuesta es exitosa, hacer proxy
+            if (proxyRes.statusCode === 200) {
+                res.writeHead(200, {
+                    'Content-Type': 'video/mp4',
+                    'Access-Control-Allow-Origin': '*'
+                });
+                proxyRes.pipe(res);
+            } else {
+                // Intentar con la siguiente instancia
+                attemptDownload(instanceIndex + 1);
             }
+        }).on('error', (error) => {
+            console.error(`Error con ${instance}:`, error.message);
+            // Intentar con la siguiente instancia
+            attemptDownload(instanceIndex + 1);
         });
+    };
 
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).send('Error al procesar el vídeo');
-    }
+    attemptDownload(0);
 });
 
 const PORT = process.env.PORT || 3000;
